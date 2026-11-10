@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,10 +26,17 @@ class MainActivity : ComponentActivity() {
 
     private val tracks = mutableStateListOf<Track>()
 
+    private val audioPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            if (granted) {
+                loadTracks()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        checkAudioPermission()
 
         setContent {
             EasyPlayerUI(
@@ -36,6 +44,8 @@ class MainActivity : ComponentActivity() {
                 onPlay = { track -> playTrack(track) }
             )
         }
+
+        checkAudioPermission()
     }
 
     private fun checkAudioPermission() {
@@ -45,35 +55,18 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
 
-        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+        if (checkSelfPermission(permission) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
             loadTracks()
         } else {
-            requestPermissions(arrayOf(permission), 100)
+            audioPermissionLauncher.launch(permission)
         }
     }
 
     private fun loadTracks() {
         tracks.clear()
         tracks.addAll(AudioRepository(this).getAllTracks())
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(
-            requestCode,
-            permissions,
-            grantResults
-        )
-
-        if (requestCode == 100 &&
-            grantResults.isNotEmpty() &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED
-        ) {
-            loadTracks()
-        }
     }
 
     private fun playTrack(track: Track) {
@@ -83,7 +76,11 @@ class MainActivity : ComponentActivity() {
             putExtra("track_title", track.title)
         }
 
-        startForegroundService(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
     }
 }
 
